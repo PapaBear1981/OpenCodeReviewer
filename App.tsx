@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { AuthForm } from './components/AuthForm';
+import { ApiKeysForm } from './components/ApiKeysForm';
 import { RepoForm } from './components/RepoForm';
 import { FileList } from './components/FileList';
 import { ReviewPanel } from './components/ReviewPanel';
@@ -10,13 +11,14 @@ import { ProgressBar } from './components/ProgressBar'; // New import
 import { GithubFile, CodeIssue, AnalyzedFileReport, RepoInfo, AlertInfo } from './types';
 import { fetchRepoFiles, fetchFileContent, createGithubIssue as apiCreateGithubIssue } from './services/githubService';
 import { reviewCodeWithGemini, SUPPORTED_FILE_EXTENSIONS } from './services/geminiService';
-import { GithubIcon, CodeIcon, LightBulbIcon, ChevronDownIcon, ChevronUpIcon, IssueOpenedIcon, CheckCircleIcon, XCircleIcon, InformationCircleIcon } from './components/Icons';
+import { GithubIcon, CodeIcon, LightBulbIcon, ChevronDownIcon, ChevronUpIcon, IssueOpenedIcon, CheckCircleIcon, XCircleIcon, InformationCircleIcon, KeyIcon } from './components/Icons';
 import useLocalStorage from './hooks/useLocalStorage';
 
 const AVERAGE_ANALYSIS_TIME_PER_FILE_MS = 20000; // 20 seconds per file for initial estimate
 
 const App: React.FC = () => {
   const [githubPAT, setGithubPAT] = useLocalStorage<string | null>('githubPAT', null);
+  const [geminiApiKey, setGeminiApiKey] = useLocalStorage<string | null>('geminiApiKey', null);
   const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
   const [files, setFiles] = useState<GithubFile[]>([]);
   const [analyzedReports, setAnalyzedReports] = useState<AnalyzedFileReport[]>([]);
@@ -59,6 +61,11 @@ const App: React.FC = () => {
   const handlePATSubmit = (pat: string) => {
     setGithubPAT(pat);
     setAlertInfo({ type: 'success', message: 'GitHub PAT saved successfully.' });
+  };
+
+  const handleGeminiApiKeySubmit = (apiKey: string) => {
+    setGeminiApiKey(apiKey);
+    setAlertInfo({ type: 'success', message: 'Google Gemini API key saved successfully.' });
   };
 
   const handleRepoSubmit = async (owner: string, repo: string, branch: string) => {
@@ -214,6 +221,12 @@ const App: React.FC = () => {
     setEstimatedTimeRemaining(null);
   };
 
+  const handleClearGeminiApiKey = () => {
+    setGeminiApiKey(null);
+    setAnalyzedReports([]);
+    setAlertInfo({ type: 'info', message: 'Google Gemini API key cleared. Analysis results have been reset.' });
+  };
+
   const progressPercentage = totalFilesToAnalyze > 0 ? (filesAnalyzedCount / totalFilesToAnalyze) * 100 : 0;
 
   return (
@@ -254,16 +267,29 @@ const App: React.FC = () => {
       )}
 
       <main className="w-full max-w-4xl space-y-8">
-        {!githubPAT ? (
-          <AuthForm onSubmit={handlePATSubmit} />
+        {!githubPAT || !geminiApiKey ? (
+          <ApiKeysForm
+            onGithubPATSubmit={handlePATSubmit}
+            onGeminiApiKeySubmit={handleGeminiApiKeySubmit}
+            githubPAT={githubPAT}
+            geminiApiKey={geminiApiKey}
+          />
         ) : (
           <>
             <div className="bg-slate-800 p-6 rounded-lg shadow-xl">
-              <div className="flex items-center text-green-400 mb-4">
-                <CheckCircleIcon className="w-6 h-6 mr-2" />
-                <p>GitHub PAT is set. <button onClick={handleClearPAT} className="ml-2 text-primary-400 hover:text-primary-300 underline text-sm">(Clear PAT)</button></p>
+              <div className="space-y-3">
+                <div className="flex items-center text-green-400">
+                  <CheckCircleIcon className="w-6 h-6 mr-2" />
+                  <p>GitHub PAT is set. <button onClick={handleClearPAT} className="ml-2 text-primary-400 hover:text-primary-300 underline text-sm">(Clear PAT)</button></p>
+                </div>
+                <div className="flex items-center text-green-400">
+                  <KeyIcon className="w-6 h-6 mr-2" />
+                  <p>Google Gemini API key is set. <button onClick={handleClearGeminiApiKey} className="ml-2 text-primary-400 hover:text-primary-300 underline text-sm">(Clear API Key)</button></p>
+                </div>
               </div>
-              <RepoForm onSubmit={handleRepoSubmit} isLoading={isLoading && !analysisStartTime /* Only disable repo form during repo fetch */} />
+              <div className="mt-6">
+                <RepoForm onSubmit={handleRepoSubmit} isLoading={isLoading && !analysisStartTime /* Only disable repo form during repo fetch */} />
+              </div>
             </div>
 
             {files.length > 0 && (
@@ -313,6 +339,7 @@ const App: React.FC = () => {
       </main>
       <footer className="w-full max-w-4xl mt-12 text-center text-slate-500 text-sm">
         <p>Ensure your GitHub PAT has `repo` scope for reading repositories and creating issues.</p>
+        <p>Get your Google Gemini API key from <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300 underline">Google AI Studio</a>.</p>
         <p>Gemini Code Reviewer &copy; 2024. For demonstration purposes.</p>
       </footer>
     </div>
