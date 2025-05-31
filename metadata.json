@@ -1,0 +1,6 @@
+{
+  "name": "Gemini Code Reviewer",
+  "description": "An automated code review tool that uses Gemini to analyze code from a GitHub repository and helps create GitHub issues for identified problems related to performance, security, integrity, and scalability.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

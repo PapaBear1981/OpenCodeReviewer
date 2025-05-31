@@ -1,0 +1,46 @@
+{
+  "name": "gemini-code-reviewer-desktop",
+  "version": "1.0.0",
+  "description": "An automated code review tool that uses Gemini to analyze code from a GitHub repository and helps create GitHub issues for identified problems related to performance, security, integrity, and scalability.",
+  "main": "electron-main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "npm run build && electron .",
+    "electron": "electron .",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "keywords": [
+    "Gemini",
+    "Code Review",
+    "GitHub",
+    "Electron"
+  ],
+  "author": "AI Assistant",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "vite": "^5.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0"
+  },
+  "build": {
+    "appId": "com.example.geminicodereviewer",
+    "productName": "Gemini Code Reviewer",
+    "files": [
+      "**/*",
+      "!node_modules/**/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!node_modules/**/.bin",
+      "!**/*.{o,h,obj,map}",
+      "!.gitattributes",
+      "!*.code-workspace"
+    ],
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist_electron"
+    }
+  }
+}
