@@ -25,6 +25,7 @@ export const ApiKeysForm: React.FC<ApiKeysFormProps> = ({
   const [showPat, setShowPat] = useState<boolean>(false);
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [authMethod, setAuthMethod] = useState<'pat' | 'oauth'>('oauth');
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   const handleGithubSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,12 +44,13 @@ export const ApiKeysForm: React.FC<ApiKeysFormProps> = ({
   };
 
   const handleOAuthSuccess = (authState: AuthState) => {
+    setOauthError(null); // Clear any previous errors
     onGithubOAuthSubmit(authState);
   };
 
   const handleOAuthError = (error: string) => {
     console.error('OAuth error:', error);
-    // You might want to show this error to the user
+    setOauthError(error);
   };
 
   const isGitHubAuthenticated = githubPAT || (githubAuthState?.isAuthenticated && githubAuthState.authMethod === 'oauth');
@@ -92,6 +94,15 @@ export const ApiKeysForm: React.FC<ApiKeysFormProps> = ({
               onAuthError={handleOAuthError}
               currentAuthState={githubAuthState}
             />
+          )}
+
+          {/* OAuth Error Display */}
+          {oauthError && (
+            <div className="bg-red-900 bg-opacity-50 p-3 rounded border border-red-700 mt-4">
+              <p className="text-red-400 text-sm">
+                <strong>OAuth Error:</strong> {oauthError}
+              </p>
+            </div>
           )}
 
           {/* PAT Form */}

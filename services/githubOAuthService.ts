@@ -23,6 +23,10 @@ declare global {
  * Generate the GitHub OAuth authorization URL
  */
 export const generateOAuthUrl = (state?: string): string => {
+  if (!GITHUB_OAUTH_CONFIG.clientId) {
+    throw new Error('GitHub OAuth client ID is not configured');
+  }
+
   const params = new URLSearchParams({
     client_id: GITHUB_OAUTH_CONFIG.clientId,
     redirect_uri: GITHUB_OAUTH_CONFIG.redirectUri,
@@ -38,8 +42,10 @@ export const generateOAuthUrl = (state?: string): string => {
  * Generate a random state parameter for OAuth security
  */
 export const generateRandomState = (): string => {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15);
+  // Use crypto.getRandomValues() for cryptographically secure random generation
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 };
 
 /**
@@ -91,7 +97,7 @@ export const getCurrentUser = async (accessToken: string): Promise<GitHubUser> =
     throw new Error(`Failed to get user info: ${response.statusText}`);
   }
 
-  return response.json() as GitHubUser;
+  return response.json();
 };
 
 /**

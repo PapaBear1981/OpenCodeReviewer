@@ -83,11 +83,36 @@ ipcMain.handle('get-github-oauth-config', async (event) => {
 // Handle OAuth window opening
 ipcMain.handle('open-oauth-window', async (event, authUrl) => {
   return new Promise((resolve, reject) => {
+    let oauthWindow = null;
+    let server = null;
+
+    // Cleanup function
+    const cleanup = () => {
+      if (server && server.listening) {
+        server.close();
+      }
+      if (oauthWindow && !oauthWindow.isDestroyed()) {
+        oauthWindow.close();
+      }
+    };
+
     // Create a temporary HTTP server to handle the callback
-    const server = http.createServer((req, res) => {
+    server = http.createServer((req, res) => {
       const url = new URL(req.url, 'http://localhost:8080');
 
       if (url.pathname === '/auth/callback') {
+        // Validate that we have expected parameters
+        const code = url.searchParams.get('code');
+        const state = url.searchParams.get('state');
+
+        if (!code) {
+          res.writeHead(400, { 'Content-Type': 'text/html' });
+          res.end('<html><body><h1>Error: Missing authorization code</h1></body></html>');
+          cleanup();
+          reject(new Error('Missing authorization code in callback'));
+          return;
+        }
+
         // Send a success page
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end(`
@@ -96,15 +121,14 @@ ipcMain.handle('open-oauth-window', async (event, authUrl) => {
             <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
               <h1>✅ Authorization Successful!</h1>
               <p>You can close this window and return to the application.</p>
-              <script>window.close();</script>
+              <script>setTimeout(() => window.close(), 1000);</script>
             </body>
           </html>
         `);
 
         // Resolve with the full callback URL
         const callbackUrl = `http://localhost:8080${req.url}`;
-        server.close();
-        oauthWindow.close();
+        cleanup();
         resolve(callbackUrl);
       } else {
         res.writeHead(404);
@@ -115,39 +139,44 @@ ipcMain.handle('open-oauth-window', async (event, authUrl) => {
     // Start server on port 8080
     server.listen(8080, 'localhost', () => {
       console.log('OAuth callback server started on http://localhost:8080');
+
+      // Only create OAuth window after server starts successfully
+      oauthWindow = new BrowserWindow({
+        width: 500,
+        height: 600,
+        show: true,
+        modal: true,
+        parent: BrowserWindow.getFocusedWindow(),
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+
+      oauthWindow.loadURL(authUrl);
+
+      // Handle window closed without completing OAuth
+      oauthWindow.on('closed', () => {
+        cleanup();
+        reject(new Error('OAuth window was closed before completing authentication'));
+      });
     });
 
     // Handle server errors
     server.on('error', (err) => {
       console.error('OAuth callback server error:', err);
-      reject(err);
-    });
-
-    const oauthWindow = new BrowserWindow({
-      width: 500,
-      height: 600,
-      show: true,
-      modal: true,
-      parent: BrowserWindow.getFocusedWindow(),
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true
+      if (err.code === 'EADDRINUSE') {
+        reject(new Error('Port 8080 is already in use. Please close any other applications using this port and try again.'));
+      } else {
+        reject(err);
       }
-    });
-
-    oauthWindow.loadURL(authUrl);
-
-    // Handle window closed without completing OAuth
-    oauthWindow.on('closed', () => {
-      server.close();
-      reject(new Error('OAuth window was closed before completing authentication'));
+      cleanup();
     });
 
     // Clean up server after 5 minutes timeout
     setTimeout(() => {
-      if (server.listening) {
-        server.close();
-        oauthWindow.close();
+      if (server && server.listening) {
+        cleanup();
         reject(new Error('OAuth timeout - please try again'));
       }
     }, 300000); // 5 minutes
