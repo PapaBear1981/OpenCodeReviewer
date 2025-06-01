@@ -1,3 +1,4 @@
+
 # OpenCodeReviewer
 
 An automated code review tool powered by Google's Gemini AI that analyzes code from GitHub repositories and helps create GitHub issues for identified problems related to performance, security, integrity, and scalability.
@@ -135,7 +136,7 @@ OpenCodeReviewer/
 3. Fill in the application details:
    - **Application name**: Gemini Code Reviewer
    - **Homepage URL**: `http://localhost:3000`
-   - **Authorization callback URL**: `gemini-code-reviewer://auth/callback`
+   - **Authorization callback URL**: `http://localhost:8080/auth/callback`
 4. Copy the Client ID and Client Secret
 5. Add them to your `.env` file as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
 
@@ -147,7 +148,7 @@ OpenCodeReviewer/
 
 ### Gemini API Key
 
-1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+1. Visit [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key)
 2. Create a new API key
 3. Add it to your `.env` file as `GEMINI_API_KEY`
 
