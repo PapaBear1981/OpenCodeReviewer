@@ -1,23 +1,30 @@
 import React, { useState } from 'react';
 import { GithubIcon, KeyIcon, EyeIcon, EyeSlashIcon } from './Icons';
+import { GitHubOAuthForm } from './GitHubOAuthForm';
+import { AuthState } from '../types';
 
 interface ApiKeysFormProps {
   onGithubPATSubmit: (pat: string) => void;
   onGeminiApiKeySubmit: (apiKey: string) => void;
+  onGithubOAuthSubmit: (authState: AuthState) => void;
   githubPAT?: string | null;
   geminiApiKey?: string | null;
+  githubAuthState?: AuthState;
 }
 
-export const ApiKeysForm: React.FC<ApiKeysFormProps> = ({ 
-  onGithubPATSubmit, 
-  onGeminiApiKeySubmit, 
-  githubPAT, 
-  geminiApiKey 
+export const ApiKeysForm: React.FC<ApiKeysFormProps> = ({
+  onGithubPATSubmit,
+  onGeminiApiKeySubmit,
+  onGithubOAuthSubmit,
+  githubPAT,
+  geminiApiKey,
+  githubAuthState
 }) => {
   const [pat, setPat] = useState<string>('');
   const [apiKey, setApiKey] = useState<string>('');
   const [showPat, setShowPat] = useState<boolean>(false);
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [authMethod, setAuthMethod] = useState<'pat' | 'oauth'>('oauth');
 
   const handleGithubSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,10 +42,60 @@ export const ApiKeysForm: React.FC<ApiKeysFormProps> = ({
     }
   };
 
+  const handleOAuthSuccess = (authState: AuthState) => {
+    onGithubOAuthSubmit(authState);
+  };
+
+  const handleOAuthError = (error: string) => {
+    console.error('OAuth error:', error);
+    // You might want to show this error to the user
+  };
+
+  const isGitHubAuthenticated = githubPAT || (githubAuthState?.isAuthenticated && githubAuthState.authMethod === 'oauth');
+
   return (
     <div className="space-y-8">
-      {/* GitHub PAT Section */}
-      {!githubPAT && (
+      {/* GitHub Authentication Section */}
+      {!isGitHubAuthenticated && (
+        <div className="space-y-6">
+          {/* Authentication Method Selector */}
+          <div className="bg-slate-800 p-6 rounded-lg shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-100 mb-4 text-center">Choose GitHub Authentication Method</h3>
+            <div className="flex space-x-4 justify-center">
+              <button
+                onClick={() => setAuthMethod('oauth')}
+                className={`px-4 py-2 rounded-lg transition-colors duration-200 ${
+                  authMethod === 'oauth'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                OAuth (Recommended)
+              </button>
+              <button
+                onClick={() => setAuthMethod('pat')}
+                className={`px-4 py-2 rounded-lg transition-colors duration-200 ${
+                  authMethod === 'pat'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                Personal Access Token
+              </button>
+            </div>
+          </div>
+
+          {/* OAuth Form */}
+          {authMethod === 'oauth' && (
+            <GitHubOAuthForm
+              onAuthSuccess={handleOAuthSuccess}
+              onAuthError={handleOAuthError}
+              currentAuthState={githubAuthState}
+            />
+          )}
+
+          {/* PAT Form */}
+          {authMethod === 'pat' && (
         <div className="bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-md mx-auto">
           <div className="flex items-center justify-center mb-6">
             <GithubIcon className="w-12 h-12 text-primary-400" />
@@ -87,10 +144,21 @@ export const ApiKeysForm: React.FC<ApiKeysFormProps> = ({
             </button>
           </form>
         </div>
+          )}
+        </div>
+      )}
+
+      {/* Show OAuth status if authenticated */}
+      {githubAuthState?.isAuthenticated && githubAuthState.authMethod === 'oauth' && (
+        <GitHubOAuthForm
+          onAuthSuccess={handleOAuthSuccess}
+          onAuthError={handleOAuthError}
+          currentAuthState={githubAuthState}
+        />
       )}
 
       {/* Gemini API Key Section */}
-      {githubPAT && !geminiApiKey && (
+      {isGitHubAuthenticated && !geminiApiKey && (
         <div className="bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-md mx-auto">
           <div className="flex items-center justify-center mb-6">
             <KeyIcon className="w-12 h-12 text-green-400" />
@@ -101,7 +169,7 @@ export const ApiKeysForm: React.FC<ApiKeysFormProps> = ({
             This key will be stored in your browser's local storage.
           </p>
           <p className="text-blue-400 text-xs mb-4 bg-blue-900 bg-opacity-50 p-2 rounded border border-blue-700">
-            You can get your API key from <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-300">Google AI Studio</a>.
+            You can get your API key from <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-300">Google AI Studio</a>.
           </p>
           <p className="text-yellow-400 text-xs mb-6 bg-yellow-900 bg-opacity-50 p-2 rounded border border-yellow-700">
             Warning: Storing API keys in local storage is convenient for development but not recommended for production environments. Ensure you understand the risks.

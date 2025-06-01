@@ -50,9 +50,11 @@ npm install
 ```
 
 3. Set up environment variables:
-Create a `.env` file in the root directory and add your Gemini API key:
+Create a `.env` file in the root directory and add your API keys:
 ```
 GEMINI_API_KEY=your_gemini_api_key_here
+GITHUB_CLIENT_ID=your_github_oauth_app_client_id
+GITHUB_CLIENT_SECRET=your_github_oauth_app_client_secret
 ```
 
 4. Build the application:
@@ -67,7 +69,9 @@ npm run build
 npm start
 ```
 
-2. Enter your GitHub Personal Access Token when prompted
+2. Choose your GitHub authentication method:
+   - **OAuth (Recommended)**: Sign in with your GitHub account for seamless authentication
+   - **Personal Access Token**: Enter a GitHub PAT with `repo` scope
 3. Provide the repository details (owner, repo name, branch)
 4. Select files to analyze
 5. Review the AI-generated analysis results
@@ -124,7 +128,18 @@ OpenCodeReviewer/
 
 ## Configuration
 
-### GitHub Personal Access Token
+### GitHub OAuth App (Recommended)
+
+1. Go to GitHub Settings > Developer settings > OAuth Apps
+2. Click "New OAuth App"
+3. Fill in the application details:
+   - **Application name**: Gemini Code Reviewer
+   - **Homepage URL**: `http://localhost:3000`
+   - **Authorization callback URL**: `gemini-code-reviewer://auth/callback`
+4. Copy the Client ID and Client Secret
+5. Add them to your `.env` file as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
+
+### GitHub Personal Access Token (Alternative)
 
 1. Go to GitHub Settings > Developer settings > Personal access tokens
 2. Generate a new token with `repo` scope

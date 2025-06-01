@@ -22,9 +22,10 @@ async function getAiClient(): Promise<GoogleGenerativeAI> {
   let apiKey: string | undefined;
 
   try {
-    const storedApiKey = localStorage.getItem('geminiApiKey');
+    const item = localStorage.getItem('geminiApiKey');
+    const storedApiKey: string | null = item ? JSON.parse(item) : null;
     if (storedApiKey) {
-      apiKey = JSON.parse(storedApiKey);
+      apiKey = storedApiKey;
     }
   } catch (error) {
     console.warn('Failed to get API key from localStorage:', error);
@@ -94,8 +95,7 @@ export const reviewCodeWithGemini = async (codeContent: string, filePath: string
     const model = ai.getGenerativeModel({
       model: modelName,
       generationConfig: {
-        responseMimeType: "application/json",
-        // temperature: 0.2
+        responseMimeType: "application/json"
       }
     });
 

@@ -8,7 +8,7 @@ import { ReviewPanel } from './components/ReviewPanel';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { AlertMessage } from './components/AlertMessage';
 import { ProgressBar } from './components/ProgressBar'; // New import
-import { GithubFile, CodeIssue, AnalyzedFileReport, RepoInfo, AlertInfo } from './types';
+import { GithubFile, CodeIssue, AnalyzedFileReport, RepoInfo, AlertInfo, AuthState } from './types';
 import { fetchRepoFiles, fetchFileContent, createGithubIssue as apiCreateGithubIssue } from './services/githubService';
 import { reviewCodeWithGemini, SUPPORTED_FILE_EXTENSIONS } from './services/geminiService';
 import { GithubIcon, CodeIcon, LightBulbIcon, ChevronDownIcon, ChevronUpIcon, IssueOpenedIcon, CheckCircleIcon, XCircleIcon, InformationCircleIcon, KeyIcon } from './components/Icons';
@@ -18,6 +18,7 @@ const AVERAGE_ANALYSIS_TIME_PER_FILE_MS = 20000; // 20 seconds per file for init
 
 const App: React.FC = () => {
   const [githubPAT, setGithubPAT] = useLocalStorage<string | null>('githubPAT', null);
+  const [githubAuthState, setGithubAuthState] = useLocalStorage<AuthState | null>('githubAuthState', null);
   const [geminiApiKey, setGeminiApiKey] = useLocalStorage<string | null>('geminiApiKey', null);
   const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
   const [files, setFiles] = useState<GithubFile[]>([]);
@@ -68,9 +69,29 @@ const App: React.FC = () => {
     setAlertInfo({ type: 'success', message: 'Google Gemini API key saved successfully.' });
   };
 
+  const handleGithubOAuthSubmit = (authState: AuthState) => {
+    setGithubAuthState(authState);
+    if (authState.isAuthenticated) {
+      setAlertInfo({ type: 'success', message: `Successfully signed in as ${authState.user?.login}` });
+    } else {
+      setAlertInfo({ type: 'info', message: 'Signed out from GitHub' });
+      // Clear related data when signing out
+      setRepoInfo(null);
+      setFiles([]);
+      setAnalyzedReports([]);
+    }
+  };
+
+  const getGitHubToken = (): string | null => {
+    if (githubPAT) return githubPAT;
+    if (githubAuthState?.isAuthenticated && githubAuthState.token) return githubAuthState.token;
+    return null;
+  };
+
   const handleRepoSubmit = async (owner: string, repo: string, branch: string) => {
-    if (!githubPAT) {
-      setAlertInfo({ type: 'error', message: 'GitHub PAT is not set.' });
+    const token = getGitHubToken();
+    if (!token) {
+      setAlertInfo({ type: 'error', message: 'GitHub authentication is not set.' });
       return;
     }
     setRepoInfo({ owner, repo, branch });
@@ -83,8 +104,8 @@ const App: React.FC = () => {
     setEstimatedTimeRemaining(null);
     setAnalysisStartTime(null);
     try {
-      const fetchedFiles = await fetchRepoFiles(owner, repo, branch, githubPAT);
-      const codeFiles = fetchedFiles.filter(file => 
+      const fetchedFiles = await fetchRepoFiles(owner, repo, branch, token);
+      const codeFiles = fetchedFiles.filter(file =>
         SUPPORTED_FILE_EXTENSIONS.some(ext => file.path.endsWith(ext))
       );
       setFiles(codeFiles);
@@ -99,9 +120,10 @@ const App: React.FC = () => {
   };
 
   const analyzeSingleFile = useCallback(async (file: GithubFile, filePathsContext?: string) => {
-    if (!githubPAT || !repoInfo) {
+    const token = getGitHubToken();
+    if (!token || !repoInfo) {
       // This case should ideally be prevented by UI logic, but as a safeguard:
-      setAlertInfo({ type: 'error', message: 'Missing GitHub PAT or repository information for analysis.' });
+      setAlertInfo({ type: 'error', message: 'Missing GitHub authentication or repository information for analysis.' });
       // Update report status to error for this file
       setAnalyzedReports(prev => prev.map(r => r.filePath === file.path ? { ...r, status: 'error', error: 'Pre-analysis check failed: Missing auth/repo info.' } : r));
       return; // Exit if critical info is missing
@@ -113,7 +135,7 @@ const App: React.FC = () => {
     let report: AnalyzedFileReport = { filePath: file.path, issues: [], status: 'analyzing' };
 
     try {
-      const content = await fetchFileContent(repoInfo.owner, repoInfo.repo, file.path, githubPAT, repoInfo.branch);
+      const content = await fetchFileContent(repoInfo.owner, repoInfo.repo, file.path, token, repoInfo.branch);
       if (!content) {
         throw new Error('File content is empty or could not be fetched.');
       }
@@ -139,12 +161,13 @@ const App: React.FC = () => {
       return [...prev, report]; 
     });
     // No individual setCurrentTask('') here
-  }, [githubPAT, repoInfo]);
+  }, [githubPAT, githubAuthState, repoInfo, getGitHubToken]);
 
 
   const handleAnalyzeFiles = async (selectedFiles: GithubFile[]) => {
-    if (!githubPAT || !repoInfo) {
-      setAlertInfo({ type: 'error', message: 'Missing GitHub PAT or repository information.' });
+    const token = getGitHubToken();
+    if (!token || !repoInfo) {
+      setAlertInfo({ type: 'error', message: 'Missing GitHub authentication or repository information.' });
       return;
     }
     if (selectedFiles.length === 0) {
@@ -177,8 +200,9 @@ const App: React.FC = () => {
   };
 
   const createGithubIssue = async (issue: CodeIssue) => {
-    if (!githubPAT || !repoInfo) {
-      setAlertInfo({ type: 'error', message: 'Cannot create issue: Missing GitHub PAT or repository info.'});
+    const token = getGitHubToken();
+    if (!token || !repoInfo) {
+      setAlertInfo({ type: 'error', message: 'Cannot create issue: Missing GitHub authentication or repository info.'});
       return;
     }
     setIsLoading(true);
@@ -193,8 +217,8 @@ const App: React.FC = () => {
       }
       body += `**Description:**\n${issue.description}\n\n`;
       body += `*This issue was auto-generated by Gemini Code Reviewer.*`;
-      
-      const newIssue = await apiCreateGithubIssue(repoInfo.owner, repoInfo.repo, githubPAT, title, body, [issue.category, issue.severity]);
+
+      const newIssue = await apiCreateGithubIssue(repoInfo.owner, repoInfo.repo, token, title, body, [issue.category, issue.severity]);
       setAlertInfo({ type: 'success', message: `Successfully created GitHub issue #${newIssue.number}: ${newIssue.title}` });
       // Optionally, update the issue in analyzedReports to mark it as "created"
     } catch (error) {
@@ -221,13 +245,25 @@ const App: React.FC = () => {
     setEstimatedTimeRemaining(null);
   };
 
+  const handleClearAuth = () => {
+    setGithubPAT(null);
+    setGithubAuthState(null);
+    setRepoInfo(null);
+    setFiles([]);
+    setAnalyzedReports([]);
+    setAlertInfo({type: 'info', message: 'GitHub authentication cleared.'});
+    setTotalFilesToAnalyze(0);
+    setFilesAnalyzedCount(0);
+    setEstimatedTimeRemaining(null);
+  };
+
   const handleClearGeminiApiKey = () => {
     setGeminiApiKey(null);
-    setAnalyzedReports([]);
-    setAlertInfo({ type: 'info', message: 'Google Gemini API key cleared. Analysis results have been reset.' });
+    setAlertInfo({ type: 'info', message: 'Google Gemini API key cleared. You will need to re-enter it to perform new analysis.' });
   };
 
   const progressPercentage = totalFilesToAnalyze > 0 ? (filesAnalyzedCount / totalFilesToAnalyze) * 100 : 0;
+  const isGitHubAuthenticated = githubPAT || (githubAuthState?.isAuthenticated && githubAuthState.authMethod === 'oauth');
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center p-4 md:p-8">
@@ -267,12 +303,14 @@ const App: React.FC = () => {
       )}
 
       <main className="w-full max-w-4xl space-y-8">
-        {!githubPAT || !geminiApiKey ? (
+        {!isGitHubAuthenticated || !geminiApiKey ? (
           <ApiKeysForm
             onGithubPATSubmit={handlePATSubmit}
             onGeminiApiKeySubmit={handleGeminiApiKeySubmit}
+            onGithubOAuthSubmit={handleGithubOAuthSubmit}
             githubPAT={githubPAT}
             geminiApiKey={geminiApiKey}
+            githubAuthState={githubAuthState}
           />
         ) : (
           <>
@@ -280,7 +318,13 @@ const App: React.FC = () => {
               <div className="space-y-3">
                 <div className="flex items-center text-green-400">
                   <CheckCircleIcon className="w-6 h-6 mr-2" />
-                  <p>GitHub PAT is set. <button onClick={handleClearPAT} className="ml-2 text-primary-400 hover:text-primary-300 underline text-sm">(Clear PAT)</button></p>
+                  {githubPAT ? (
+                    <p>GitHub PAT is set. <button onClick={handleClearPAT} className="ml-2 text-primary-400 hover:text-primary-300 underline text-sm">(Clear PAT)</button></p>
+                  ) : githubAuthState?.isAuthenticated ? (
+                    <p>GitHub OAuth authenticated as {githubAuthState.user?.login}. <button onClick={handleClearAuth} className="ml-2 text-primary-400 hover:text-primary-300 underline text-sm">(Sign Out)</button></p>
+                  ) : (
+                    <p>GitHub authentication is set.</p>
+                  )}
                 </div>
                 <div className="flex items-center text-green-400">
                   <KeyIcon className="w-6 h-6 mr-2" />
@@ -339,7 +383,7 @@ const App: React.FC = () => {
       </main>
       <footer className="w-full max-w-4xl mt-12 text-center text-slate-500 text-sm">
         <p>Ensure your GitHub PAT has `repo` scope for reading repositories and creating issues.</p>
-        <p>Get your Google Gemini API key from <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300 underline">Google AI Studio</a>.</p>
+        <p>Get your Google Gemini API key from <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300 underline">Google AI Studio</a>.</p>
         <p>Gemini Code Reviewer &copy; 2024. For demonstration purposes.</p>
       </footer>
     </div>

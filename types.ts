@@ -85,4 +85,35 @@ export interface GithubIssueResponse {
   body?: string | null;
   // ... and many other fields
 }
-    
+
+// OAuth-related types
+export interface GitHubOAuthConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  scope: string;
+}
+
+export interface GitHubOAuthToken {
+  access_token: string;
+  token_type: string;
+  scope: string;
+  refresh_token?: string;
+  expires_in?: number;
+  refresh_token_expires_in?: number;
+}
+
+export interface GitHubUser {
+  login: string;
+  id: number;
+  avatar_url: string;
+  name: string | null;
+  email: string | null;
+}
+
+export interface AuthState {
+  isAuthenticated: boolean;
+  authMethod: 'pat' | 'oauth' | null;
+  user?: GitHubUser;
+  token?: string;
+}
