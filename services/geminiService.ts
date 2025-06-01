@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenerativeAI, GenerateContentResponse } from "@google/generative-ai";
 import { CodeIssue } from '../types';
 
 // Declare electronAPI for TypeScript to recognize the global object injected by preload.js
@@ -17,20 +17,35 @@ export const SUPPORTED_FILE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.py', '
 
 // Function to get the GoogleGenAI client instance
 // This ensures the API key is fetched and client initialized only when needed
-async function getAiClient(): Promise<GoogleGenAI> {
-  if (!window.electronAPI || typeof window.electronAPI.getApiKey !== 'function') {
-    // This error is critical and indicates a setup problem with Electron/preload script
-    throw new Error("Electron API for fetching API key is not available. Ensure the preload script is correctly configured and loaded.");
+async function getAiClient(): Promise<GoogleGenerativeAI> {
+  // First try to get API key from localStorage
+  let apiKey: string | undefined;
+
+  try {
+    const item = localStorage.getItem('geminiApiKey');
+    const storedApiKey: string | null = item ? JSON.parse(item) : null;
+    if (storedApiKey) {
+      apiKey = storedApiKey;
+    }
+  } catch (error) {
+    console.warn('Failed to get API key from localStorage:', error);
   }
 
-  const apiKey = await window.electronAPI.getApiKey();
+  // Fallback to environment variable via Electron API if no localStorage key
+  if (!apiKey && window.electronAPI && typeof window.electronAPI.getApiKey === 'function') {
+    try {
+      apiKey = await window.electronAPI.getApiKey();
+    } catch (error) {
+      console.warn('Failed to get API key from Electron API:', error);
+    }
+  }
 
   if (!apiKey) {
     // This error will be caught by the calling function (reviewCodeWithGemini)
     // and should be transformed into a user-facing message.
-    throw new Error("API_KEY is not configured. Please set the API_KEY environment variable before starting the Electron application.");
+    throw new Error("Google Gemini API key is not configured. Please provide your API key in the application settings or set the API_KEY environment variable.");
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenerativeAI(apiKey);
 }
 
 
@@ -77,16 +92,15 @@ export const reviewCodeWithGemini = async (codeContent: string, filePath: string
     const ai = await getAiClient(); // Get client instance with API key
     const prompt = generatePrompt(codeContent, filePath, filePathsContext);
 
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const model = ai.getGenerativeModel({
       model: modelName,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        // temperature: 0.2 
+      generationConfig: {
+        responseMimeType: "application/json"
       }
     });
 
-    let jsonStr = response.text.trim();
+    const response = await model.generateContent(prompt);
+    let jsonStr = response.response.text().trim();
     
     const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
     const match = jsonStr.match(fenceRegex);
@@ -110,12 +124,13 @@ export const reviewCodeWithGemini = async (codeContent: string, filePath: string
         errorMessage += ` Details: ${error.message}`;
         // Specific check for API key related errors from getAiClient or SDK
         if (error.message.toLowerCase().includes("api key") || // For messages from getAiClient
-            error.message.toLowerCase().includes("api_key") || 
+            error.message.toLowerCase().includes("api_key") ||
             error.message.toLowerCase().includes("permission denied") || // General SDK errors
             error.message.toLowerCase().includes("authentication") ||
-            error.message.toLowerCase().includes("electron api") // For messages from getAiClient
+            error.message.toLowerCase().includes("electron api") || // For messages from getAiClient
+            error.message.toLowerCase().includes("configured") // For new error message
           ) {
-            errorMessage = "Failed to analyze code with Gemini. There might be an issue with the API Key configuration (ensure API_KEY environment variable is set before launching the Electron app) or permissions with the Gemini API.";
+            errorMessage = "Failed to analyze code with Gemini. Please check your Google Gemini API key configuration in the application settings or ensure the API_KEY environment variable is set.";
         }
     }
      return [{ 

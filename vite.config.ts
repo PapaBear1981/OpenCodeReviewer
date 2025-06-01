@@ -16,9 +16,13 @@ export default defineConfig(({ mode }) => {
         }
       },
       base: './',
+      server: {
+        port: 3000,
+        host: 'localhost'
+      },
       build: {
         rollupOptions: {
-          external: ['@google/genai']
+          // No external dependencies needed now
         }
       }
     };

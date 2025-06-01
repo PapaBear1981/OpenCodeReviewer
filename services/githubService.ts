@@ -3,9 +3,12 @@ import { GithubFile, GithubTreeResponse, GithubContentResponse, GithubIssueRespo
 
 const GITHUB_API_BASE_URL = 'https://api.github.com';
 
-async function githubApiFetch<T,>(endpoint: string, pat: string, options: RequestInit = {}): Promise<T> {
+async function githubApiFetch<T,>(endpoint: string, token: string, options: RequestInit = {}): Promise<T> {
+  // Determine if this is a PAT (starts with ghp_) or OAuth token
+  const authHeader = token.startsWith('ghp_') ? `token ${token}` : `Bearer ${token}`;
+
   const headers = {
-    'Authorization': `token ${pat}`,
+    'Authorization': authHeader,
     'Accept': 'application/vnd.github.v3+json',
     ...options.headers,
   };
@@ -23,13 +26,13 @@ async function githubApiFetch<T,>(endpoint: string, pat: string, options: Reques
   return response.json() as T;
 }
 
-export const fetchRepoFiles = async (owner: string, repo: string, branch: string, pat: string): Promise<GithubFile[]> => {
+export const fetchRepoFiles = async (owner: string, repo: string, branch: string, token: string): Promise<GithubFile[]> => {
   // Get the SHA of the latest commit on the specified branch
-  const branchData = await githubApiFetch<{ commit: { sha: string } }>(`/repos/${owner}/${repo}/branches/${branch}`, pat);
+  const branchData = await githubApiFetch<{ commit: { sha: string } }>(`/repos/${owner}/${repo}/branches/${branch}`, token);
   const treeSha = branchData.commit.sha;
 
   // Fetch the tree recursively
-  const data = await githubApiFetch<GithubTreeResponse>(`/repos/${owner}/${repo}/git/trees/${treeSha}?recursive=1`, pat);
+  const data = await githubApiFetch<GithubTreeResponse>(`/repos/${owner}/${repo}/git/trees/${treeSha}?recursive=1`, token);
   
   return data.tree
     .filter(item => item.type === 'blob') // Only files, not directories
@@ -41,12 +44,12 @@ export const fetchRepoFiles = async (owner: string, repo: string, branch: string
     }));
 };
 
-export const fetchFileContent = async (owner: string, repo: string, path: string, pat: string, branch?: string): Promise<string> => {
+export const fetchFileContent = async (owner: string, repo: string, path: string, token: string, branch?: string): Promise<string> => {
   let endpoint = `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
   if (branch) {
     endpoint += `?ref=${encodeURIComponent(branch)}`;
   }
-  const data = await githubApiFetch<GithubContentResponse>(endpoint, pat);
+  const data = await githubApiFetch<GithubContentResponse>(endpoint, token);
 
   if (data.encoding === 'base64' && data.content) {
     // Decode base64 content
@@ -63,7 +66,7 @@ export const fetchFileContent = async (owner: string, repo: string, path: string
 export const createGithubIssue = async (
   owner: string,
   repo: string,
-  pat: string,
+  token: string,
   title: string,
   body: string,
   labels?: string[]
@@ -71,7 +74,7 @@ export const createGithubIssue = async (
   const issueData = { title, body, labels };
   return githubApiFetch<GithubIssueResponse>(
     `/repos/${owner}/${repo}/issues`,
-    pat,
+    token,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
